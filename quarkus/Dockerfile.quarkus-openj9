@@ -1,0 +1,33 @@
+FROM hotswapagent/hotswap-vm
+COPY ./target/pingperf-runner.jar /work/application.jar
+COPY ./target/lib /work/lib
+
+# install additional libraries
+RUN apk add util-linux #setarch
+RUN apk add gdb
+RUN apk add vim
+
+ENV JAVA_HOME="/root/8build"
+
+# options to run with OpenJ9 snapshot+restore - quarkus.locales and quarkus.default-locale were needed to get this working with openj9
+ENV JAVA_OPTS "$JAVA_OPTS -Djava.net.preferIPv4Stack=true -Xmx128m -Dquarkus.locales=en-US -Dquarkus.default-locale=en-US"
+ENV SNAPSHOT_OPTS "-Xint -Xms8m -Xgcpolicy:optthruput -Xshare:off -Xsnapshot:file=image,trigger=hotswap/test/jaxrs/ping/PingResource.snapshot"
+ENV RESTORE_OPTS "-Xint -Xms9m -Xgcpolicy:optthruput -Xshare:off -Xrestore:file=image"
+
+# snapshot + restore run commands
+RUN echo 'alias run_snapshot="${JAVA_HOME}/bin/java ${JAVA_OPTS} ${SNAPSHOT_OPTS} -cp /work/application -jar /work/application.jar"' >> ~/.bashrc
+RUN echo 'alias run_restore="${JAVA_HOME}/bin/java ${JAVA_OPTS} ${RESTORE_OPTS} -cp /work/application -jar /work/application.jar"' >> ~/.bashrc  
+
+# startup instructions
+ENV START_TEXT "********************\n\
+Quarkus Pingperf demo for OpenJ9 snapshot+restore\n\
+JDK is set through JAVA_HOME\n\
+Run Quarkus Pingperf snapshot with 'run_snapshot' alias\n\
+Run Quarkus Pingperf restore with 'run_restore' alias\n\
+********************"
+RUN echo 'echo -e ${START_TEXT}' >> ~/.bashrc
+
+# disable ASLR
+CMD setarch `uname -m` -R /bin/bash
+
+WORKDIR /root
